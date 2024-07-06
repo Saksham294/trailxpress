@@ -1,0 +1,23 @@
+{
+  "name": "routes-explorer",
+  "version": "1.0.1",
+  "description": "Parse your Express API and find various route details like HTTP method, paths and function bodies",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "express",
+    "routes",
+    "parser",
+    "ast",
+    "api"
+  ],
+  "author": "Saksham Singh",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/generator": "^7.24.7",
+    "@babel/parser": "^7.24.7",
+    "@babel/traverse": "^7.24.7"
+  }
+}

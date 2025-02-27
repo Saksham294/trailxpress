@@ -1,6 +1,6 @@
 {
   "name": "routes-explorer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Parse your Express API and find various route details like HTTP method, paths and function bodies",
   "main": "index.js",
   "repository": {

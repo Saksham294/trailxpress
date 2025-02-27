@@ -68,8 +68,8 @@ console.log(swaggerDocs);
 | Parameter  | Type     | Default  | Description |
 |------------|---------|---------|------------|
 | `routes`  | `array`  | Required | Array of extracted route details. |
-| `title`   | `string` | `"API Documentation"` | (Optional) Title for the Swagger docs. |
-| `version` | `string` | `"1.0.0"` | (Optional) API version for Swagger docs. |
+| `save`   | `boolean` | `false` | (Optional) Save the Swagger doc. |
+| `format` | `string` | `"JSON"` | (Optional) "YAML" for YAML format. |
 
 ## **Issues**  
 If you encounter any issues or want to request a new feature, kindly open an issue.  

@@ -1,11 +1,11 @@
 {
   "name": "trailxpress",
-  "version": "1.2.1",
+  "version": "1.2.3",
   "description": "Parse your Express API and find various route details like HTTP method, paths and function bodies",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Saksham294/routes-explorer.git"
+    "url": "git+https://github.com/Saksham294/trailxpress.git"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -20,9 +20,9 @@
   "author": "Saksham Singh",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Saksham294/routes-explorer/issues"
+    "url": "https://github.com/Saksham294/trailxpress/issues"
   },
-  "homepage": "https://github.com/Saksham294/routes-explorer",
+  "homepage": "https://github.com/Saksham294/trailxpress",
   "dependencies": {
     "@babel/generator": "^7.24.7",
     "@babel/parser": "^7.24.7",

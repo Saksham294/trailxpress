@@ -1,4 +1,4 @@
-import { getRouter,getRoutes } from "./src/parser";
-import { generateSwagger } from "./src/swaggerDocGen";
+const { getRouter, getRoutes } = require("./src/parser");
+const { generateSwagger } = require("./src/swaggerDocGen");
 
 module.exports = { getRouter, getRoutes, generateSwagger };

@@ -76,4 +76,3 @@ If you encounter any issues or want to request a new feature, kindly open an iss
 
 ## **License**  
 MIT  
-```

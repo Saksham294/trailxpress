@@ -15,7 +15,14 @@
     "routes",
     "parser",
     "ast",
-    "api"
+    "api",
+    "endpoint",
+    "endpoints",
+    "route",
+    "path",
+    "methods",
+    "middlewares",
+    "list"
   ],
   "author": "Saksham Singh",
   "license": "MIT",

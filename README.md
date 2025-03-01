@@ -28,6 +28,32 @@ try {
 } catch (error) {
   console.error('Error:', error.message);
 }
+
+/*
+Sample Output
+
+[
+  {
+    method: 'GET',
+    path: '/',
+    middlewares: [],
+    handler: "(req, res) => {\n  res.send('hello world');\n}"
+  },
+  {
+  {
+    method: 'POST',
+    path: '/login',
+    middlewares: ['isAuthenticated'],
+    handler: "(req, res) => {\n  res.send('hello world');\n}"
+  },
+  {
+    method: 'DELETE',
+    path: '/delete',
+    middlewares: [],
+    handler: "(req, res) => {\n  res.send('hello world');\n}"
+  },
+] 
+*/
 ```
 
 ### **Filtering Routes by HTTP Method**  

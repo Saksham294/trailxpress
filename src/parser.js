@@ -4,7 +4,7 @@ const babelParser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 
-function getRouter(apiFilePath) {
+function parseFile(apiFilePath) {
   let apiCode;
   try {
     apiCode = fs.readFileSync(apiFilePath, 'utf-8');
@@ -12,21 +12,21 @@ function getRouter(apiFilePath) {
     throw new Error(`Failed to read file ${apiFilePath}: ${error.message}`);
   }
 
-  let apiAst;
   try {
-    apiAst = babelParser.parse(apiCode, {
+    return babelParser.parse(apiCode, {
       sourceType: 'module',
       plugins: ['jsx', 'typescript', 'dynamicImport'],
     });
   } catch (error) {
     throw new Error(`Failed to parse file ${apiFilePath}: ${error.message}`);
   }
+}
 
+function getRouter(apiAst) {
   let routerVariableName;
   traverse(apiAst, {
     VariableDeclaration(varPath) {
-      const declarations = varPath.get('declarations');
-      declarations.forEach((declaration) => {
+      varPath.get('declarations').forEach((declaration) => {
         if (
           declaration.get('init').isCallExpression() &&
           declaration.get('init.callee').isMemberExpression() &&
@@ -37,28 +37,13 @@ function getRouter(apiFilePath) {
       });
     }
   });
-
   return routerVariableName;
 }
 
 function getRoutes(apiFilePath, filterMethods = []) {
-  let apiCode;
-  try {
-    apiCode = fs.readFileSync(apiFilePath, 'utf-8');
-  } catch (error) {
-    throw new Error(`Failed to read file ${apiFilePath}: ${error.message}`);
-  }
-  let apiAst;
-  try {
-    apiAst = babelParser.parse(apiCode, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript', 'dynamicImport'],
-    });
-  } catch (error) {
-    throw new Error(`Failed to parse file ${apiFilePath}: ${error.message}`);
-  }
+  const apiAst = parseFile(apiFilePath); // Parse once
+  const routerVariableName = getRouter(apiAst);
 
-  // Gather function file paths from ImportDeclarations
   const functionFilePaths = [];
   traverse(apiAst, {
     ImportDeclaration(importPath) {
@@ -70,15 +55,10 @@ function getRoutes(apiFilePath, filterMethods = []) {
     }
   });
 
-  // Build function definitions from imported files
   const functionDefinitions = {};
   functionFilePaths.forEach(filePath => {
     try {
-      const functionsCode = fs.readFileSync(filePath, 'utf-8');
-      const functionsAst = babelParser.parse(functionsCode, {
-        sourceType: 'module',
-        plugins: ['jsx', 'typescript', 'dynamicImport'],
-      });
+      const functionsAst = parseFile(filePath);
       traverse(functionsAst, {
         ExportNamedDeclaration(exportPath) {
           if (exportPath.node.declaration?.type === 'FunctionDeclaration') {
@@ -102,7 +82,6 @@ function getRoutes(apiFilePath, filterMethods = []) {
     }
   });
 
-  // Extract imported functions from API file
   const importedFunctions = {};
   traverse(apiAst, {
     ImportDeclaration(importPath) {
@@ -116,10 +95,7 @@ function getRoutes(apiFilePath, filterMethods = []) {
     }
   });
 
-  const routerVariableName = getRouter(apiFilePath);
   const routes = [];
-
-  // Traverse API AST to extract routes with middleware and handler
   traverse(apiAst, {
     CallExpression(callPath) {
       if (
@@ -130,7 +106,6 @@ function getRoutes(apiFilePath, filterMethods = []) {
         const args = callPath.get('arguments');
         const routePath = args[0].node.value;
 
-        // If only one function is passed after the path, treat it as the handler.
         if (args.length === 2) {
           const routeFunctionNode = args[1];
           let handlerCode = '';
@@ -141,16 +116,11 @@ function getRoutes(apiFilePath, filterMethods = []) {
             handlerCode = generate(routeFunctionNode.node).code;
           }
           routes.push({ method, path: routePath, middlewares: [], handler: handlerCode });
-        }
-        // If more than one function is passed, extract middleware and handler
-        else if (args.length > 2) {
+        } else if (args.length > 2) {
           let middlewares = [];
-          // All functions except the first (path) and last (handler) are middlewares.
           for (let i = 1; i < args.length - 1; i++) {
-            const middlewareCode = generate(args[i].node).code;
-            middlewares.push(middlewareCode);
+            middlewares.push(generate(args[i].node).code);
           }
-          // The final function is the handler.
           let handlerCode = '';
           const handlerNode = args[args.length - 1];
           if (handlerNode.isIdentifier()) {
@@ -165,9 +135,7 @@ function getRoutes(apiFilePath, filterMethods = []) {
     }
   });
 
-  // Filter routes by methods if filterMethods is provided.
   return filterMethods.length > 0 ? routes.filter(route => filterMethods.includes(route.method)) : routes;
 }
 
-
-module.exports = { getRouter, getRoutes };
+module.exports = { getRoutes };

@@ -7,6 +7,7 @@ Parse your Express API and extract various route details like HTTP methods, path
 ✅ Handles different function types used in route definitions.  
 ✅ Supports filtering routes based on request type.  
 ✅ Generates Swagger documentation for API routes.  
+✅ Generates Postman collections for API testing.  
 
 ## **Installation**  
 
@@ -80,6 +81,20 @@ const swaggerDocs = generateSwagger(routes);
 console.log(swaggerDocs);
 ```
 
+### **Postman Collection Generation**
+TrailXpress can generate Postman collections for easy API testing.
+
+```js
+const { generatePostmanCollection } = require('trailxpress');
+
+const routes = getRoutes(apiFilePath);
+await generatePostmanCollection(routes, {
+    name: 'My API',
+    baseUrl: 'https://api.example.com',
+    save: true  // Will save as my-api-postman-collection.json
+});
+```
+
 ## **Function Parameters**  
 
 ### **getRoutes Function**  
@@ -96,6 +111,15 @@ console.log(swaggerDocs);
 | `routes`  | `array`  | Required | Array of extracted route details. |
 | `save`   | `boolean` | `false` | (Optional) Save the Swagger doc. |
 | `format` | `string` | `"JSON"` | (Optional) "YAML" for YAML format. |
+
+### **generatePostmanCollection Function**
+
+| Parameter  | Type     | Default  | Description |
+|------------|---------|---------|------------|
+| `routes`  | `array`  | Required | Array of extracted route details. |
+| `options.name` | `string` | `"API Documentation"` | Name of the Postman collection. |
+| `options.baseUrl` | `string` | `"http://localhost:3000"` | Base URL for the API. |
+| `options.save` | `boolean` | `false` | Save collection to file. |
 
 ## **Issues**  
 If you encounter any issues or want to request a new feature, kindly open an issue.  

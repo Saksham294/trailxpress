@@ -16,41 +16,94 @@ function saveSwaggerFile(swaggerSpec, format = 'json', outputPath = 'swagger') {
   }
 }
 
-function generateSwagger(routes, save = false, format = 'json') {
-  const swaggerSpec = generateSwaggerSpec(routes);
+function generateSwagger(routes, config = {}) {
+  const defaultConfig = {
+    save: false,
+    format: 'json',
+    outputPath: 'swagger',
+    title: 'API Documentation',
+    version: '1.0.0',
+    description: 'This is the API documentation for the application.',
+    contact: {
+      name: 'API Support',
+      url: 'http://www.your-organisation.com/support',
+      email: 'support@your-organisation.com'
+    },
+    servers: [
+      {
+        url: 'http://localhost:3000',
+        description: 'Local server'
+      }
+    ]
+  };
 
-  if (save) {
-    saveSwaggerFile(swaggerSpec, format);
+  const finalConfig = { ...defaultConfig, ...config };
+  const swaggerSpec = generateSwaggerSpec(routes, finalConfig);
+
+  if (finalConfig.save) {
+    saveSwaggerFile(swaggerSpec, finalConfig.format, finalConfig.outputPath);
   }
 
   return swaggerSpec; // Return spec for in-memory use
 }
 
-function generateSwaggerSpec(routes) {
-    const swaggerSpec = {
-      openapi: '3.0.0',
-      info: {
-        title: 'API Documentation',
-        version: '1.0.0',
+function generateSwaggerSpec(routes, config) {
+  const swaggerSpec = {
+    openapi: '3.0.0',
+    info: {
+      title: config.title,
+      version: config.version,
+      description: config.description,
+      contact: config.contact,
+    },
+    servers: config.servers,
+    paths: {},
+  };
+
+  routes.forEach(route => {
+    const { method, path, middleware } = route;
+    const formattedPath = path.replace(/:([^/]+)/g, '{$1}');
+
+    if (!swaggerSpec.paths[formattedPath]) {
+      swaggerSpec.paths[formattedPath] = {};
+    }
+
+    swaggerSpec.paths[formattedPath][method.toLowerCase()] = {
+      summary: `Handler for ${method.toUpperCase()} ${path}`,
+      parameters: extractParameters(path),
+      responses: {
+        200: { description: 'Success' },
+        400: { description: 'Bad request' },
+        500: { description: 'Internal server error' }
       },
-      paths: {},
     };
-    routes.forEach(({ method, path }) => {
-      if (!swaggerSpec.paths[path]) {
-        swaggerSpec.paths[path] = {};
-      }
-      swaggerSpec.paths[path][method] = {
-        summary: `Handler for ${method.toUpperCase()} ${path}`,
-        responses: {
-          200: { description: 'Success' },
-          400: { description: 'Bad request' },
-          500: { description: 'Internal server error'}
-        },
-      };
-    });
-  
-    return swaggerSpec;
+
+    if (middleware && middleware.length > 0) {
+      swaggerSpec.paths[formattedPath][method].description = `Middleware:\n${middleware.map(mw => `- ${mw.name || 'anonymous'}`).join('\n')}`;
+    }
+  });
+
+  return swaggerSpec;
 }
-  
+
+function extractParameters(path) {
+  const parameters = [];
+  const paramRegex = /:([^/]+)/g;
+  let match;
+
+  while ((match = paramRegex.exec(path)) !== null) {
+    parameters.push({
+      name: match[1],
+      in: 'path',
+      required: true,
+      schema: {
+        type: 'string'
+      },
+      description: `Parameter: ${match[1]}`
+    });
+  }
+
+  return parameters;
+}
+
 module.exports = { generateSwagger };
-  

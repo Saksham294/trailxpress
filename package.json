@@ -1,6 +1,6 @@
 {
   "name": "trailxpress",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Parse your Express API and find various route details like HTTP method, paths and function bodies",
   "main": "index.js",
   "repository": {

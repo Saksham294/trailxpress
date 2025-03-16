@@ -41,7 +41,7 @@ function getRouter(apiAst) {
 }
 
 function getRoutes(apiFilePath, filterMethods = []) {
-  const apiAst = parseFile(apiFilePath); // Parse once
+  const apiAst = parseFile(apiFilePath);
   const routerVariableName = getRouter(apiAst);
 
   const functionFilePaths = [];
@@ -135,7 +135,9 @@ function getRoutes(apiFilePath, filterMethods = []) {
     }
   });
 
-  return filterMethods.length > 0 ? routes.filter(route => filterMethods.includes(route.method)) : routes;
+  return filterMethods.length > 0
+    ? routes.filter(route => filterMethods.includes(route.method))
+    : routes;
 }
 
 module.exports = { getRoutes };

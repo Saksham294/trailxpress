@@ -4,6 +4,7 @@ function generateRoutes(apiFilePath, methods) {
   try {
     const filterMethods = methods ? methods.split(',').map(m => m.trim().toUpperCase()) : [];
     const routes = routesGenerator.getRoutes(apiFilePath, filterMethods);
+    console.log(routes)
   } catch (error) {
     console.error('Error generating routes:', error.message);
   }

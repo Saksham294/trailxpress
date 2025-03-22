@@ -32,6 +32,27 @@ npm install -g trailxpress
 Include TrailXpress in your Node.js project and extract routes from an Express API file.  
 
 ```js
+
+//api.js
+const express = require('express');
+const router = express.Router();
+const { getAboutUser } = require('./userController.js');
+const { isAuthenticated } = require('./middlewares');
+
+// Home route
+router.get('/', (req, res) => {
+  res.send('Hello World');
+});
+
+// Login route
+router.post('/login', isAuthenticated, (req, res) => {
+  res.send('User logged in');
+});
+
+// About User route
+router.get('/about-user/:id',getAboutUser)
+
+// index.js
 const { getRoutes } = require('trailxpress');
 
 const apiFilePath = 'path/to/api.js';
@@ -58,6 +79,12 @@ try {
     "path": "/login",
     "middlewares": ["isAuthenticated"],
     "handler": "(req, res) => { res.send('User logged in'); }"
+  },
+  {
+    "method": "GET",
+    "path": "/about-user/:id",
+    "middlewares": [],
+    "handler": "(req, res) => { res.send('User Details are as follows'); }"
   }
 ]
 ```

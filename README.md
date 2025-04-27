@@ -50,7 +50,7 @@ app.get('/', (req, res) => {
 
 //index.js
 const { getRoutes } = require('./src/generators/routesGenerator.js');
-console.log(getRoutes(__filename, ['post']));
+console.log(getRoutes('/path/to/app.js'));
 ```
 
 #### **Sample Output**  

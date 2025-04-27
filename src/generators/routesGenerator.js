@@ -4,140 +4,229 @@ const babelParser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 
-function parseFile(apiFilePath) {
-  let apiCode;
+const astCache = new Map();
+function parseFile(filePath) {
+  if (astCache.has(filePath)) return astCache.get(filePath);
+  let code;
   try {
-    apiCode = fs.readFileSync(apiFilePath, 'utf-8');
-  } catch (error) {
-    throw new Error(`Failed to read file ${apiFilePath}: ${error.message}`);
+    code = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read file ${filePath}: ${err.message}`);
   }
-
-  try {
-    return babelParser.parse(apiCode, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript', 'dynamicImport'],
-    });
-  } catch (error) {
-    throw new Error(`Failed to parse file ${apiFilePath}: ${error.message}`);
-  }
+  const ast = babelParser.parse(code, {
+    sourceType: 'module',
+    plugins: ['jsx', 'typescript', 'dynamicImport'],
+  });
+  astCache.set(filePath, ast);
+  return ast;
 }
 
-function getRouter(apiAst) {
-  let routerVariableName;
-  traverse(apiAst, {
-    VariableDeclaration(varPath) {
-      varPath.get('declarations').forEach((declaration) => {
-        if (
-          declaration.get('init').isCallExpression() &&
-          declaration.get('init.callee').isMemberExpression() &&
-          declaration.get('init.callee.property').isIdentifier({ name: 'Router' })
-        ) {
-          routerVariableName = declaration.get('id').node.name;
-        }
-      });
-    }
-  });
-  return routerVariableName;
-}
-
-function getRoutes(apiFilePath, filterMethods = []) {
-  const apiAst = parseFile(apiFilePath);
-  const routerVariableName = getRouter(apiAst);
-
-  const functionFilePaths = [];
-  traverse(apiAst, {
-    ImportDeclaration(importPath) {
-      const importSource = importPath.node.source.value;
-      if (importSource.startsWith('.')) {
-        const absolutePath = path.resolve(path.dirname(apiFilePath), importSource);
-        functionFilePaths.push(absolutePath);
-      }
-    }
-  });
-
-  const functionDefinitions = {};
-  functionFilePaths.forEach(filePath => {
-    try {
-      const functionsAst = parseFile(filePath);
-      traverse(functionsAst, {
-        ExportNamedDeclaration(exportPath) {
-          if (exportPath.node.declaration?.type === 'FunctionDeclaration') {
-            const functionName = exportPath.node.declaration.id.name;
-            functionDefinitions[functionName] = generate(exportPath.node.declaration).code;
-          } else if (exportPath.node.declaration?.type === 'VariableDeclaration') {
-            exportPath.node.declaration.declarations.forEach((declaration) => {
-              if (
-                declaration.id &&
-                declaration.init &&
-                (declaration.init.type === 'ArrowFunctionExpression' || declaration.init.type === 'FunctionExpression')
-              ) {
-                functionDefinitions[declaration.id.name] = generate(declaration.init).code;
-              }
-            });
-          }
-        },
-      });
-    } catch (error) {
-      console.error(`Failed to process file ${filePath}:`, error.message);
-    }
-  });
-
-  const importedFunctions = {};
-  traverse(apiAst, {
-    ImportDeclaration(importPath) {
-      importPath.node.specifiers.forEach((specifier) => {
-        if (specifier.type === 'ImportSpecifier') {
-          const importedName = specifier.imported.name;
-          const localName = specifier.local.name;
-          importedFunctions[localName] = functionDefinitions[importedName];
-        }
-      });
-    }
-  });
-
-  const routes = [];
-  traverse(apiAst, {
-    CallExpression(callPath) {
+function getExpressInstances(ast) {
+  let routerName;
+  let appName;
+  traverse(ast, {
+    VariableDeclarator({ node }) {
+      const { id, init } = node;
+      if (!init) return;
       if (
-        callPath.get('callee').isMemberExpression() &&
-        callPath.get('callee.object').isIdentifier({ name: routerVariableName })
+        init.type === 'CallExpression' &&
+        init.callee.type === 'MemberExpression' &&
+        init.callee.object.name === 'express' &&
+        init.callee.property.name === 'Router'
       ) {
-        const method = callPath.get('callee.property').node.name.toUpperCase();
-        const args = callPath.get('arguments');
-        const routePath = args[0].node.value;
+        routerName = id.name;
+      }
+      if (
+        init.type === 'CallExpression' &&
+        init.callee.type === 'Identifier' &&
+        init.callee.name === 'express'
+      ) {
+        appName = id.name;
+      }
+    }
+  });
+  return { routerName, appName };
+}
 
-        if (args.length === 2) {
-          const routeFunctionNode = args[1];
-          let handlerCode = '';
-          if (routeFunctionNode.isIdentifier()) {
-            const functionName = routeFunctionNode.node.name;
-            handlerCode = importedFunctions[functionName] || functionDefinitions[functionName] || '';
-          } else if (routeFunctionNode.isArrowFunctionExpression() || routeFunctionNode.isFunctionExpression()) {
-            handlerCode = generate(routeFunctionNode.node).code;
+function extractRoutesAndMounts(ast, routerName, appName) {
+  const routes = [];
+  const mounts = [];
+  traverse(ast, {
+    CallExpression(callPath) {
+      const callee = callPath.get('callee');
+      if (!callee.isMemberExpression()) return;
+      const obj = callee.get('object');
+      if (!(
+        (routerName && obj.isIdentifier({ name: routerName })) ||
+        (appName && obj.isIdentifier({ name: appName }))
+      )) return;
+
+      const method = callee.get('property').node.name.toUpperCase();
+      const args = callPath.get('arguments');
+      if (method === 'USE' && args.length === 2 && args[0].isStringLiteral() && args[1].isIdentifier()) {
+        mounts.push({ prefix: args[0].node.value, routerName: args[1].node.name });
+        return;
+      }
+      if (method !== 'USE') {
+        const routePath = args[0].node.value;
+        const middlewares = [];
+        for (let i = 1; i < args.length - 1; i++) {
+          middlewares.push(generate(args[i].node).code);
+        }
+        const last = args[args.length - 1];
+        let handlerName = '';
+        let handlerCode = '';
+        if (last.isIdentifier()) {
+          handlerName = last.node.name;
+          handlerCode = handlerName;
+        } else {
+          handlerCode = generate(last.node).code;
+        }
+        routes.push({ method, path: routePath, middlewares, handlerName, handlerCode });
+      }
+    }
+  });
+  return { routes, mounts };
+}
+
+function collectHandlerDefinitions(ast, baseDir) {
+  const handlerModules = {};
+
+  traverse(ast, {
+    VariableDeclarator({ node }) {
+      const { id, init } = node;
+      if (init && init.type === 'CallExpression' && init.callee.name === 'require') {
+        const reqPath = init.arguments[0] && init.arguments[0].value;
+        if (reqPath && reqPath.startsWith('.')) {
+          const absPath = require.resolve(path.resolve(baseDir, reqPath));
+          if (id.type === 'ObjectPattern') {
+            id.properties.forEach(prop => {
+              if (prop.key && prop.key.name) handlerModules[prop.key.name] = absPath;
+            });
+          } else if (id.type === 'Identifier') {
+            handlerModules[id.name] = absPath;
           }
-          routes.push({ method, path: routePath, middlewares: [], handler: handlerCode });
-        } else if (args.length > 2) {
-          let middlewares = [];
-          for (let i = 1; i < args.length - 1; i++) {
-            middlewares.push(generate(args[i].node).code);
+        }
+      }
+    },
+    ImportDeclaration({ node }) {
+      const src = node.source.value;
+      if (src.startsWith('.')) {
+        const absPath = require.resolve(path.resolve(baseDir, src));
+        node.specifiers.forEach(spec => {
+          if (spec.type === 'ImportSpecifier' && spec.local && spec.local.name) {
+            handlerModules[spec.local.name] = absPath;
           }
-          let handlerCode = '';
-          const handlerNode = args[args.length - 1];
-          if (handlerNode.isIdentifier()) {
-            const functionName = handlerNode.node.name;
-            handlerCode = importedFunctions[functionName] || functionDefinitions[functionName] || '';
-          } else if (handlerNode.isArrowFunctionExpression() || handlerNode.isFunctionExpression()) {
-            handlerCode = generate(handlerNode.node).code;
+        });
+      }
+    }
+  });
+
+
+  const fileToNames = {};
+  for (const [name, filePath] of Object.entries(handlerModules)) {
+    fileToNames[filePath] = fileToNames[filePath] || new Set();
+    fileToNames[filePath].add(name);
+  }
+
+  const defs = {};
+  Object.entries(fileToNames).forEach(([filePath, namesSet]) => {
+    const names = Array.from(namesSet);
+    let childAst;
+    try {
+      childAst = parseFile(filePath);
+    } catch (err) {
+      names.forEach(n => defs[n] = '');
+      return;
+    }
+    traverse(childAst, {
+      FunctionDeclaration(path) {
+        const id = path.node.id;
+        if (id && namesSet.has(id.name)) {
+          defs[id.name] = generate(path.node).code;
+        }
+      },
+      VariableDeclarator(path) {
+        const { id, init } = path.node;
+        if (id.type === 'Identifier' && namesSet.has(id.name) && init && ['FunctionExpression','ArrowFunctionExpression'].includes(init.type)) {
+          defs[id.name] = generate(init).code;
+        }
+      },
+      AssignmentExpression(path) {
+        const { node } = path;
+        if (node.left.type === 'MemberExpression') {
+          const obj = node.left.object;
+          const prop = node.left.property;
+          const name = prop.name;
+          if (namesSet.has(name) && (obj.name === 'exports' ||
+              (obj.type === 'MemberExpression' && obj.object.name === 'module' && obj.property.name === 'exports'))
+          ) {
+            if (['FunctionExpression','ArrowFunctionExpression'].includes(node.right.type)) {
+              defs[name] = generate(node.right).code;
+            }
           }
-          routes.push({ method, path: routePath, middlewares, handler: handlerCode });
+        }
+      }
+    });
+    names.forEach(n => { if (!defs[n]) defs[n] = ''; });
+  });
+
+  return defs;
+}
+
+function getRoutesFromFile(filePath, filterMethods = []) {
+  const ast = parseFile(filePath);
+  const { routerName, appName } = getExpressInstances(ast);
+  const handlerDefs = collectHandlerDefinitions(ast, path.dirname(filePath));
+  const { routes } = extractRoutesAndMounts(ast, routerName, appName);
+  return routes.map(r => ({
+    method: r.method,
+    path: r.path,
+    middlewares: r.middlewares,
+    handlerName: r.handlerName,
+    handlerCode: handlerDefs[r.handlerName] || r.handlerCode
+  })).filter(r => 
+    filterMethods.length 
+      ? filterMethods.map(m => m.toUpperCase()).includes(r.method)
+      : true
+  );
+}
+
+function getRoutes(appFilePath, filterMethods = []) {
+  const ast = parseFile(appFilePath);
+  const { routerName, appName } = getExpressInstances(ast);
+  const moduleMap = {};
+  const cwd = path.dirname(appFilePath);
+
+  traverse(ast, {
+    ImportDeclaration({ node }) {
+      if (node.source.value.startsWith('.')) {
+        const abs = require.resolve(path.resolve(cwd, node.source.value));
+        node.specifiers.forEach(spec => moduleMap[spec.local.name] = abs);
+      }
+    },
+    VariableDeclarator({ node }) {
+      const { id, init } = node;
+      if (init && init.type==='CallExpression' && init.callee.name==='require') {
+        const src = init.arguments[0] && init.arguments[0].value;
+        if (src && src.startsWith('.')) {
+          const abs = require.resolve(path.resolve(cwd, src));
+          if (id.type==='Identifier') moduleMap[id.name] = abs;
         }
       }
     }
   });
 
-  return filterMethods.length > 0
-    ? routes.filter(route => filterMethods.includes(route.method))
-    : routes;
+  const { routes: topRoutes, mounts } = extractRoutesAndMounts(ast, routerName, appName);
+  const all = [...topRoutes];
+
+  mounts.forEach(({ prefix, routerName: rn }) => {
+    const modPath = moduleMap[rn];
+    if (!modPath) return;
+    getRoutesFromFile(modPath, filterMethods).forEach(r => all.push({ ...r, path: `${prefix}${r.path}` }));
+  });
+
+  return all;
 }
 
 module.exports = { getRoutes };

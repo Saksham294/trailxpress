@@ -32,59 +32,68 @@ npm install -g trailxpress
 Include TrailXpress in your Node.js project and extract routes from an Express API file.  
 
 ```js
-
-//api.js
+//app.js
 const express = require('express');
-const router = express.Router();
-const { getAboutUser } = require('./userController.js');
-const { isAuthenticated } = require('./middlewares');
+const userRoutes = require('./routes/user.routes.js');
+const productRoutes = require('./routes/product.routes.js');
+const { isAuthenticated } = require('./middlewares/auth.middleware');
 
-// Home route
-router.get('/', (req, res) => {
-  res.send('Hello World');
+const app = express();
+const router=express.Router();
+
+app.use(express.json());
+app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes);
+app.get('/', (req, res) => {
+  res.send('Welcome to the API');
 });
 
-// Login route
-router.post('/login', isAuthenticated, (req, res) => {
-  res.send('User logged in');
-});
-
-// About User route
-router.get('/about-user/:id',getAboutUser)
-
-// index.js
-const { getRoutes } = require('trailxpress');
-
-const apiFilePath = 'path/to/api.js';
-
-try {
-  const routes = getRoutes(apiFilePath);
-  console.log('Extracted Routes:', routes);
-} catch (error) {
-  console.error('Error:', error.message);
-}
+//index.js
+const { getRoutes } = require('./src/generators/routesGenerator.js');
+console.log(getRoutes(__filename, ['post']));
 ```
 
 #### **Sample Output**  
-```json
+```js
 [
   {
-    "method": "GET",
-    "path": "/",
-    "middlewares": [],
-    "handler": "(req, res) => { res.send('Hello World'); }"
+    method: 'GET',
+    path: '/',
+    middlewares: [],
+    handlerName: '',
+    handlerCode: "(req, res) => {\n  res.send('Welcome to the API');\n}"
   },
   {
-    "method": "POST",
-    "path": "/login",
-    "middlewares": ["isAuthenticated"],
-    "handler": "(req, res) => { res.send('User logged in'); }"
+    method: 'POST',
+    path: '/api/users/',
+    middlewares: [ 'isAuthenticated' ],
+    handlerName: 'createUser',
+    handlerCode: '(req, res) => {\n' +
+      '  const {\n' +
+      '    name,\n' +
+      '    email\n' +
+      '  } = req.body;\n' +
+      '  res.status(201).json({\n' +
+      '    id: Date.now(),\n' +
+      '    name,\n' +
+      '    email\n' +
+      '  });\n' +
+      '}'
   },
   {
-    "method": "GET",
-    "path": "/about-user/:id",
-    "middlewares": [],
-    "handler": "(req, res) => { res.send('User Details are as follows'); }"
+    method: 'GET',
+    path: '/api/products/:id',
+    middlewares: [],
+    handlerName: 'getProductById',
+    handlerCode: '(req, res) => {\n' +
+      '  const {\n' +
+      '    id\n' +
+      '  } = req.params;\n' +
+      '  res.json({\n' +
+      '    id,\n' +
+      "    name: 'Sample Product'\n" +
+      '  });\n' +
+      '}'
   }
 ]
 ```

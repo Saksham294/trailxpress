@@ -1,6 +1,6 @@
 {
   "name": "trailxpress",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "bin": {
     "trailxpress": "./bin/trailxpress.js"
   },
